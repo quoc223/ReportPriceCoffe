@@ -1,8 +1,11 @@
+// Coffee Robusta Price Tracker với Daily Email Report
 const { Client } = require('@mathieuc/tradingview');
 const nodemailer = require('nodemailer');
 const emailConfig = require('./email-config');
+const http = require('http');
 
 const client = new Client();
+const PORT = process.env.PORT || 3000;
 
 // Tạo transporter cho email
 const transporter = nodemailer.createTransport({
@@ -19,13 +22,13 @@ let reportData = {
     lowPrice: null,
     symbol: null,
     previousPrice: null,
-    lastEmailSent: null // Thêm biến để theo dõi lần gửi email cuối
+    lastEmailSent: null
 };
 
 // Hàm tạo nội dung email
 function generateEmailReport() {
     const now = new Date();
-    const duration = Math.floor((now - reportData.startTime) / 1000 / 60); // phút
+    const duration = Math.floor((now - reportData.startTime) / 1000 / 60);
     
     let html = `
     <h2>☕ Coffee Robusta Price Report</h2>
@@ -50,7 +53,6 @@ function generateEmailReport() {
         </tr>
     `;
     
-    // Lấy 10 update gần nhất
     const recentUpdates = reportData.updates.slice(-10);
     recentUpdates.forEach(update => {
         const changeColor = update.change >= 0 ? 'green' : 'red';
@@ -119,14 +121,96 @@ async function sendPriceAlert(price, type) {
     }
 }
 
+// Hàm lấy thời gian báo cáo tiếp theo
+function getNextReportTime() {
+    const now = new Date();
+    const reportHour = emailConfig.dailyReportTime || 8;
+    const nextReportTime = new Date();
+    nextReportTime.setHours(reportHour, 0, 0, 0);
+    
+    if (now >= nextReportTime) {
+        nextReportTime.setDate(nextReportTime.getDate() + 1);
+    }
+    
+    return nextReportTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
+// Hàm tạo báo cáo web
+function generateWebReport() {
+    const now = new Date();
+    const duration = Math.floor((now - reportData.startTime) / 1000 / 60);
+    
+    let html = `
+        <h1>☕ Coffee Robusta Price Tracker</h1>
+        <div class="status">
+            <p><strong>🟢 Service Status:</strong> Running</p>
+            <p><strong>📊 Symbol:</strong> ${reportData.symbol || 'Connecting...'}</p>
+            <p><strong>⏱️ Uptime:</strong> ${duration} minutes</p>
+            <p><strong>🔄 Last Update:</strong> ${reportData.updates.length > 0 ? reportData.updates[reportData.updates.length - 1].timestamp : 'No updates yet'}</p>
+            ${reportData.currentPrice ? `<p><strong>💰 Current Price:</strong> <span class="price">$${reportData.currentPrice.toFixed(2)}</span></p>` : ''}
+        </div>
+    `;
+    
+    if (reportData.currentPrice) {
+        html += `
+            <h3>📊 Current Market Data</h3>
+            <table>
+                <tr><td><strong>Current Price</strong></td><td class="price">$${reportData.currentPrice.toFixed(2)}</td></tr>
+                <tr><td><strong>High</strong></td><td>$${reportData.highPrice?.toFixed(2) || 'N/A'}</td></tr>
+                <tr><td><strong>Low</strong></td><td>$${reportData.lowPrice?.toFixed(2) || 'N/A'}</td></tr>
+                <tr><td><strong>Total Updates</strong></td><td>${reportData.updates.length}</td></tr>
+            </table>
+        `;
+    }
+    
+    if (reportData.updates.length > 0) {
+        html += `
+            <h3>📈 Recent Price Updates</h3>
+            <table>
+                <tr>
+                    <th>Time</th>
+                    <th>Price</th>
+                    <th>Change</th>
+                    <th>Change %</th>
+                </tr>
+        `;
+        
+        const recentUpdates = reportData.updates.slice(-10);
+        recentUpdates.reverse().forEach(update => {
+            const changeClass = update.change >= 0 ? 'positive' : 'negative';
+            html += `
+                <tr>
+                    <td>${update.timestamp}</td>
+                    <td>$${update.price.toFixed(2)}</td>
+                    <td class="${changeClass}">$${update.change.toFixed(2)}</td>
+                    <td class="${changeClass}">${update.changePercent}%</td>
+                </tr>
+            `;
+        });
+        
+        html += '</table>';
+    }
+    
+    html += `
+        <div style="margin-top: 30px; padding: 15px; background: #f0f8ff; border-radius: 5px; font-size: 12px; color: #666;">
+            <p><em>📅 Report generated: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</em></p>
+            <p><em>🤖 Powered by TradingView API - Coffee Price Tracker</em></p>
+            <p><em>📧 Next daily report: ${getNextReportTime()}</em></p>
+        </div>
+    `;
+    
+    return html;
+}
+
+// Hàm khởi động kết nối TradingView và lấy dữ liệu realtime
 async function startRealtimeQuotes() {
     try {
         console.log('🚀 Starting Coffee Robusta RC1 Realtime Quotes...');
         console.log('═══════════════════════════════════════════════════════');
-          // Tạo session
+        
         const chart = new client.Session.Chart();
-          // Symbol hoạt động tốt cho Robusta Coffee       
-           const workingSymbols = [
+        
+        const workingSymbols = [
             'ICEEUR:RC1!',    // Robusta Coffee Continuous Contract - ICE Europe
             'ICEEUR:RCH2025', // Robusta Coffee March 2025
             'ICEEUR:RCK2025', // Robusta Coffee May 2025
@@ -237,14 +321,6 @@ async function startRealtimeQuotes() {
             }
         });
 
-        // Giữ chương trình chạy
-        process.on('SIGINT', () => {
-            console.log('\n🛑 Stopping realtime quotes...');
-            chart.delete();
-            client.end();
-            process.exit(0);
-        });
-
         console.log('📡 Waiting for realtime data... (Press Ctrl+C to stop)');
         
     } catch (error) {
@@ -255,9 +331,8 @@ async function startRealtimeQuotes() {
 // Hàm kiểm tra và gửi báo cáo hàng ngày
 function checkAndSendDailyReport() {
     const now = new Date();
-    const today = now.toDateString(); // Lấy ngày hiện tại dưới dạng string
+    const today = now.toDateString();
     
-    // Kiểm tra xem đã gửi báo cáo hôm nay chưa
     if (reportData.lastEmailSent !== today && reportData.currentPrice) {
         console.log('📧 Sending daily report...');
         sendEmailReport();
@@ -265,35 +340,167 @@ function checkAndSendDailyReport() {
     }
 }
 
-// Hàm lên lịch gửi báo cáo hàng ngày vào giờ đã cấu hình
+// Hàm lên lịch gửi báo cáo hàng ngày
 function scheduleDailyReport() {
     const now = new Date();
-    const reportHour = emailConfig.dailyReportTime || 8; // Mặc định 8:00 AM
+    const reportHour = emailConfig.dailyReportTime || 8;
     const nextReportTime = new Date();
     nextReportTime.setHours(reportHour, 0, 0, 0);
     
-    // Nếu đã qua giờ báo cáo hôm nay, lên lịch cho ngày mai
     if (now >= nextReportTime) {
         nextReportTime.setDate(nextReportTime.getDate() + 1);
     }
     
-    const timeUntilNextReport = nextReportTime - now;
-    
+    const timeUntilNextReport = nextReportTime - now;    
     setTimeout(() => {
         checkAndSendDailyReport();
-        // Sau đó lặp lại mỗi 24 giờ
         setInterval(checkAndSendDailyReport, 24 * 60 * 60 * 1000);
     }, timeUntilNextReport);
     
     console.log(`📧 Daily report scheduled for ${reportHour}:00 AM (Next: ${nextReportTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })})`);
 }
 
-// Khởi tạo kết nối
+// Tạo HTTP server cho Render
+const server = http.createServer((req, res) => {
+    const url = req.url;
+    const method = req.method;
+    
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+    
+    try {
+        if (url === '/' || url === '/status') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                status: 'Coffee Robusta Price Tracker is running',
+                service: 'active',
+                symbol: reportData.symbol || 'Connecting...',
+                currentPrice: reportData.currentPrice || 'N/A',
+                lastUpdate: reportData.updates.length > 0 ? reportData.updates[reportData.updates.length - 1].timestamp : 'No updates yet',
+                uptime: Math.floor((new Date() - reportData.startTime) / 1000),
+                totalUpdates: reportData.updates.length,
+                nextReportTime: getNextReportTime(),
+                isConnected: !!reportData.symbol,
+                timestamp: new Date().toISOString()
+            }, null, 2));
+        } else if (url === '/health') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+                status: 'healthy', 
+                timestamp: new Date().toISOString(),
+                uptime: Math.floor((new Date() - reportData.startTime) / 1000)
+            }));
+        } else if (url === '/report') {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Coffee Price Report</title>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+                        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        .status { background: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+                        .price { font-size: 24px; color: #2E8B57; font-weight: bold; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+                        th { background-color: #f2f2f2; }
+                        .positive { color: #2E8B57; }
+                        .negative { color: #DC143C; }
+                        .refresh-btn { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+                        .refresh-btn:hover { background: #45a049; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        ${generateWebReport()}
+                        <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+                    </div>
+                </body>
+                </html>
+            `);
+        } else if (url === '/api/price') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                symbol: reportData.symbol,
+                price: reportData.currentPrice,
+                high: reportData.highPrice,
+                low: reportData.lowPrice,
+                lastUpdate: reportData.updates.length > 0 ? reportData.updates[reportData.updates.length - 1] : null,
+                timestamp: new Date().toISOString()
+            }));
+        } else if (url === '/api/history') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            const recentUpdates = reportData.updates.slice(-50);
+            res.end(JSON.stringify({
+                updates: recentUpdates,
+                count: recentUpdates.length,
+                timestamp: new Date().toISOString()
+            }));
+        } else {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+                error: 'Not found',
+                availableEndpoints: [
+                    'GET / - Status overview',
+                    'GET /health - Health check',
+                    'GET /report - HTML report',
+                    'GET /api/price - Current price data',
+                    'GET /api/history - Price history'
+                ]
+            }));
+        }
+    } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal server error', message: error.message }));
+    }
+});
+
+// Graceful shutdown handlers
+process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        client.end();
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('\n🛑 SIGINT received, shutting down gracefully');
+    server.close(() => {
+        client.end();
+        process.exit(0);
+    });
+});
+
+// Khởi động application
+console.log('🚀 Initializing Coffee Robusta Price Tracker...');
+console.log('═'.repeat(50));
+
+// Khởi động HTTP server
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌐 HTTP Server running on port ${PORT}`);
+    console.log(`📊 Status endpoint: http://localhost:${PORT}/`);
+    console.log(`❤️ Health check: http://localhost:${PORT}/health`);
+    console.log(`📧 Report view: http://localhost:${PORT}/report`);
+    console.log(`📈 Price API: http://localhost:${PORT}/api/price`);
+    console.log('═'.repeat(50));
+});
+
+// Khởi tạo kết nối TradingView
 client.onConnected(() => {
     console.log('🔗 Connected to TradingView');
     startRealtimeQuotes();
-    
-    // Lên lịch gửi báo cáo hàng ngày vào 8:00 AM
     scheduleDailyReport();
 });
 
@@ -302,5 +509,8 @@ client.onDisconnected(() => {
 });
 
 client.onError((error) => {
-    console.error('❌ Connection Error:', error);
+    console.error('❌ TradingView Connection Error:', error);
 });
+
+// Bắt đầu kết nối
+console.log('🔌 Connecting to TradingView...');
