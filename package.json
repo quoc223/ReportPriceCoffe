@@ -1,19 +1,32 @@
 {
-  "name": "coffee_tradingview",
+  "name": "coffee-robusta-tracker",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "realtime": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "coffee",
+    "trading",
+    "realtime",
+    "price-tracker",
+    "robusta",
+    "email-notifications"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Real-time Coffee Robusta price tracking with email notifications",
   "dependencies": {
     "@mathieuc/tradingview": "github:Mathieu2301/TradingView-API",
     "dotenv": "^16.5.0",
     "nodemailer": "^7.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   }
 }
