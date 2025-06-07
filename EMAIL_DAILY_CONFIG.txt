@@ -1,0 +1,28 @@
+📧 Cấu hình Email Hàng Ngày
+=============================
+
+✅ ĐÃ ĐƯỢC CẤU HÌNH:
+- Gửi báo cáo chỉ MỘT LẦN mỗi ngày vào 8:00 AM
+- Cảnh báo giá vẫn gửi ngay lập tức khi vượt ngưỡng
+
+🎯 THAY ĐỔI THỜI GIAN GỬI BÁO CÁO:
+Chỉnh sửa trong file email-config.js:
+
+dailyReportTime: 8,   // 8:00 AM (mặc định)
+dailyReportTime: 9,   // 9:00 AM
+dailyReportTime: 18,  // 6:00 PM
+
+📋 NỘI DUNG BÁO CÁO:
+- Giá hiện tại của cà phê Robusta
+- Giá cao nhất và thấp nhất trong ngày
+- 10 cập nhật giá gần nhất
+- Thời gian theo dõi
+
+🚨 CẢNH BÁO GIÁ (gửi ngay lập tức):
+- Giá > $6000: Cảnh báo HIGH
+- Giá < $4000: Cảnh báo LOW
+
+▶️ CHẠY ỨNG DỤNG:
+npm start
+
+✨ Ứng dụng sẽ hiển thị thời gian gửi báo cáo tiếp theo khi khởi động!

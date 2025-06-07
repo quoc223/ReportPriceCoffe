@@ -1,0 +1,26 @@
+📧 HƯỚNG DẪN CẤU HÌNH EMAIL
+=================================
+
+Trước khi chạy ứng dụng, bạn cần cấu hình email trong file 'email-config.js':
+
+1. MỞ FILE email-config.js
+2. THAY ĐỔI CÁC THÔNG TIN SAU:
+
+   ✅ user: 'your-email@gmail.com' → 'email-của-bạn@gmail.com'
+   ✅ pass: 'your-app-password' → 'app-password-từ-google'
+   ✅ from: 'your-email@gmail.com' → 'email-của-bạn@gmail.com'
+   ✅ to: 'recipient@example.com' → 'email-người-nhận@example.com'
+
+3. TẠO APP PASSWORD CHO GMAIL:
+   - Vào https://myaccount.google.com/
+   - Security → 2-Step Verification → App passwords
+   - Tạo password mới cho "Mail"
+   - Sử dụng password này cho trường 'pass'
+
+4. CHẠY ỨNG DỤNG:
+   npm start
+
+⚠️  LƯU Ý: 
+- Không sử dụng mật khẩu thường của Gmail
+- Phải bật 2-Factor Authentication trước
+- Kiểm tra thư mục spam nếu không nhận được email

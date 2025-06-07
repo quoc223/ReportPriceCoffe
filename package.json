@@ -1,0 +1,19 @@
+{
+  "name": "coffee_tradingview",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "realtime": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@mathieuc/tradingview": "github:Mathieu2301/TradingView-API",
+    "dotenv": "^16.5.0",
+    "nodemailer": "^7.0.3"
+  }
+}
