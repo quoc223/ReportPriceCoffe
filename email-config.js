@@ -12,14 +12,20 @@ module.exports = {
     to: process.env.EMAIL_TO,    // Email người nhận    // Report settings
     reportInterval: 24 * 60 * 60 * 1000, // Gửi báo cáo mỗi 24 giờ (1 ngày) - chỉ để tham khảo
     dailyReportTime: 8, // Giờ gửi báo cáo hàng ngày (8 = 8:00 AM)
-    
-    // Price alert settings
+      // Price alert settings
     priceAlerts: {
         enabled: true,
         thresholds: {
             high: 6000,  // Cảnh báo khi giá > $6000
             low: 4000    // Cảnh báo khi giá < $4000
         }
+    },
+      // Login settings for report page
+    login: {
+        enabled: process.env.LOGIN_ENABLED === 'true',
+        username: process.env.ADMIN_USERNAME || 'admin',
+        password: process.env.ADMIN_PASSWORD || 'coffee2025',
+        sessionTimeout: 24 * 60 * 60 * 1000 // 24 hours
     }
 };
 

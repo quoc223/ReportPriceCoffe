@@ -40,6 +40,162 @@ let reportData = {
     monthlyData: {} // Lưu trữ dữ liệu tháng để hiển thị xu hướng
 };
 
+// Quản lý session đơn giản
+const activeSessions = new Map();
+
+// Hàm tạo session ID
+function generateSessionId() {
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+// Hàm kiểm tra session
+function isValidSession(sessionId) {
+    if (!sessionId || !activeSessions.has(sessionId)) {
+        return false;
+    }
+    
+    const session = activeSessions.get(sessionId);
+    const now = Date.now();
+    
+    if (now > session.expires) {
+        activeSessions.delete(sessionId);
+        return false;
+    }
+    
+    // Gia hạn session
+    session.expires = now + emailConfig.login.sessionTimeout;
+    return true;
+}
+
+// Hàm lấy session từ cookie
+function getSessionFromCookie(cookieHeader) {
+    if (!cookieHeader) return null;
+    
+    const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+    }, {});
+    
+    return cookies.sessionId || null;
+}
+
+// Hàm tạo trang login
+function generateLoginPage(error = '') {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Coffee Price Tracker - Login</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { 
+                    font-family: Arial, sans-serif; 
+                    margin: 0; 
+                    padding: 0; 
+                    background: linear-gradient(135deg, #2E8B57, #228B22);
+                    height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+                .login-container {
+                    background: white;
+                    padding: 40px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                    width: 100%;
+                    max-width: 400px;
+                    text-align: center;
+                }
+                .logo {
+                    font-size: 48px;
+                    margin-bottom: 10px;
+                }
+                .title {
+                    color: #2E8B57;
+                    margin-bottom: 30px;
+                    font-size: 24px;
+                    font-weight: bold;
+                }
+                .form-group {
+                    margin-bottom: 20px;
+                    text-align: left;
+                }
+                .form-group label {
+                    display: block;
+                    margin-bottom: 5px;
+                    color: #333;
+                    font-weight: bold;
+                }
+                .form-group input {
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #ddd;
+                    border-radius: 5px;
+                    font-size: 16px;
+                    box-sizing: border-box;
+                }
+                .form-group input:focus {
+                    border-color: #2E8B57;
+                    outline: none;
+                }
+                .login-btn {
+                    width: 100%;
+                    background: #2E8B57;
+                    color: white;
+                    padding: 12px;
+                    border: none;
+                    border-radius: 5px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    font-weight: bold;
+                }
+                .login-btn:hover {
+                    background: #228B22;
+                }
+                .error {
+                    color: #DC143C;
+                    margin-top: 15px;
+                    padding: 10px;
+                    background: #ffebee;
+                    border-radius: 5px;
+                    border: 1px solid #DC143C;
+                }
+                .info {
+                    margin-top: 20px;
+                    padding: 15px;
+                    background: #e3f2fd;
+                    border-radius: 5px;
+                    color: #1976d2;
+                    font-size: 14px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="login-container">
+                <div class="logo">☕</div>
+                <div class="title">Coffee Price Tracker</div>
+                ${error ? `<div class="error">${error}</div>` : ''}
+                <form method="POST" action="/login">
+                    <div class="form-group">
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <button type="submit" class="login-btn">🔐 Login</button>
+                </form>
+        
+            </div>
+        </body>
+        </html>
+    `;
+}
+
 // Hàm tạo nội dung email
 function generateEmailReport() {
     const now = new Date();
@@ -1141,130 +1297,227 @@ const server = http.createServer((req, res) => {
         } else if (parsedUrl.pathname === '/test-email') {
             // Test gửi email
             testEmailReport(req, res);
-            return;
-        } else if (parsedUrl.pathname === '/test-smtp') {
+            return;        } else if (parsedUrl.pathname === '/test-smtp') {
             // Test kết nối SMTP
             testSMTPConnection(req, res);
             return;
-        } else if (parsedUrl.pathname === '/report') {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Coffee Price Report</title>
-                    <meta charset="utf-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1">                    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-                        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                        .status { background: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-                        .price { font-size: 24px; color: #2E8B57; font-weight: bold; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-                        th { background-color: #f2f2f2; }
-                        .positive { color: #2E8B57; }
-                        .negative { color: #DC143C; }
-                        .refresh-btn, .test-btn { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
-                        .test-btn { background: #2196F3; }
-                        .refresh-btn:hover { background: #45a049; }
-                        .test-btn:hover { background: #0b7dda; }
-                        #priceChart { width: 100% !important; height: 400px !important; }
-                        .test-section { background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-                        .test-result { margin-top: 10px; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; }
-                        .test-success { background: #d4edda; color: #155724; }
-                        .test-error { background: #f8d7da; color: #721c24; }
-                    </style>
-                </head>
-                <body>
-                    <div class="container">
-                        ${generateWebReport()}                        <div class="test-section">
-                            <h3>📧 Email Testing</h3>
-                            <p>Test email functionality before waiting for scheduled reports:</p>
-                            <button class="test-btn" onclick="testSMTP()">🔧 Test SMTP Connection</button>
-                            <button class="test-btn" onclick="testEmail()">📧 Send Test Email</button>
-                            <button class="test-btn" onclick="testMonthlyData()">📊 Test Monthly Data</button>
-                            <div id="testResult" class="test-result" style="display: none;"></div>
-                        </div>
-                        <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
-                    </div>                    <script>
-                        async function testSMTP() {
-                            const resultDiv = document.getElementById('testResult');
-                            resultDiv.style.display = 'block';
-                            resultDiv.textContent = 'Testing SMTP connection...';
-                            resultDiv.className = 'test-result';
-                            
-                            try {
-                                const response = await fetch('/test-smtp');
-                                const data = await response.json();
-                                
-                                if (data.success) {
-                                    resultDiv.className = 'test-result test-success';
-                                    resultDiv.textContent = '✅ SMTP Connection: ' + data.message + '\\n\\nConfig: ' + JSON.stringify(data.config, null, 2);
-                                } else {
-                                    resultDiv.className = 'test-result test-error';
-                                    resultDiv.textContent = '❌ SMTP Connection Failed: ' + data.error + '\\n\\nConfig: ' + JSON.stringify(data.config, null, 2);
-                                }
-                            } catch (error) {
-                                resultDiv.className = 'test-result test-error';
-                                resultDiv.textContent = '❌ Network Error: ' + error.message;
-                            }
-                        }
+        } else if (parsedUrl.pathname === '/login') {
+            if (method === 'GET') {
+                // Hiển thị trang login
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(generateLoginPage());
+            } else if (method === 'POST') {
+                // Xử lý login
+                let body = '';
+                req.on('data', chunk => {
+                    body += chunk.toString();
+                });
+                req.on('end', () => {
+                    const params = new URLSearchParams(body);
+                    const username = params.get('username');
+                    const password = params.get('password');
+                    
+                    if (username === emailConfig.login.username && password === emailConfig.login.password) {
+                        // Đăng nhập thành công
+                        const sessionId = generateSessionId();
+                        activeSessions.set(sessionId, {
+                            username: username,
+                            expires: Date.now() + emailConfig.login.sessionTimeout
+                        });
                         
-                        async function testEmail() {
-                            const resultDiv = document.getElementById('testResult');
-                            resultDiv.style.display = 'block';
-                            resultDiv.textContent = 'Sending test email...';
-                            resultDiv.className = 'test-result';
+                        res.writeHead(302, {
+                            'Location': '/report',
+                            'Set-Cookie': `sessionId=${sessionId}; Path=/; HttpOnly; Max-Age=${emailConfig.login.sessionTimeout / 1000}`
+                        });
+                        res.end();
+                        console.log(`✅ User ${username} logged in successfully`);
+                    } else {
+                        // Đăng nhập thất bại
+                        res.writeHead(200, { 'Content-Type': 'text/html' });
+                        res.end(generateLoginPage('Invalid username or password!'));
+                        console.log(`❌ Failed login attempt: ${username}`);
+                    }
+                });
+            }
+            return;
+        } else if (parsedUrl.pathname === '/logout') {
+            // Đăng xuất
+            const sessionId = getSessionFromCookie(req.headers.cookie);
+            if (sessionId) {
+                activeSessions.delete(sessionId);
+            }
+            res.writeHead(302, {
+                'Location': '/login',
+                'Set-Cookie': 'sessionId=; Path=/; HttpOnly; Max-Age=0'
+            });
+            res.end();
+            return;        } else if (parsedUrl.pathname === '/report') {
+            // Kiểm tra đăng nhập trước khi hiển thị report
+            const sessionId = getSessionFromCookie(req.headers.cookie);
+            
+            if (!emailConfig.login.enabled || isValidSession(sessionId)) {
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Coffee Price Report</title>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                        <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+                            .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #2E8B57; }
+                            .header h1 { margin: 0; color: #2E8B57; }
+                            .user-section { display: flex; align-items: center; gap: 10px; }
+                            .user-info { background: #e8f5e8; padding: 8px 12px; border-radius: 5px; font-size: 14px; color: #2E8B57; }
+                            .logout-btn { background: #DC143C; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
+                            .logout-btn:hover { background: #B91C3C; }
+                            .status { background: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+                            .price { font-size: 24px; color: #2E8B57; font-weight: bold; }
+                            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                            th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+                            th { background-color: #f2f2f2; }
+                            .positive { color: #2E8B57; }
+                            .negative { color: #DC143C; }
+                            .refresh-btn, .test-btn { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+                            .test-btn { background: #2196F3; }
+                            .refresh-btn:hover { background: #45a049; }
+                            .test-btn:hover { background: #0b7dda; }
+                            #priceChart { width: 100% !important; height: 400px !important; }
+                            .test-section { background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                            .test-result { margin-top: 10px; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; }
+                            .test-success { background: #d4edda; color: #155724; }
+                            .test-error { background: #f8d7da; color: #721c24; }
+                            .login-status { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>☕ Coffee Price Tracker</h1>
+                                ${emailConfig.login.enabled ? `
+                                <div class="user-section">
+                                    <div class="user-info">
+                                        👤 Logged in as: ${emailConfig.login.username}
+                                    </div>
+                                    <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+                                </div>
+                                ` : ''}
+                            </div>
                             
-                            try {
-                                const response = await fetch('/test-email');
-                                const data = await response.json();
-                                
-                                if (data.success) {
-                                    resultDiv.className = 'test-result test-success';
-                                    resultDiv.textContent = '✅ Email Sent Successfully!\\n\\nMessage ID: ' + data.messageId + '\\n\\nFrom: ' + data.emailConfig.from + '\\nTo: ' + data.emailConfig.to + '\\n\\nCheck your email inbox (and spam folder)!';
-                                } else {
-                                    resultDiv.className = 'test-result test-error';
-                                    resultDiv.textContent = '❌ Email Failed: ' + data.error + '\\n\\nConfig: ' + JSON.stringify(data.emailConfig, null, 2);
-                                }
-                            } catch (error) {
-                                resultDiv.className = 'test-result test-error';
-                                resultDiv.textContent = '❌ Network Error: ' + error.message;
-                            }
-                        }
-                        
-                        async function testMonthlyData() {
-                            const resultDiv = document.getElementById('testResult');
-                            resultDiv.style.display = 'block';
-                            resultDiv.textContent = 'Fetching monthly data from TradingView...';
-                            resultDiv.className = 'test-result';
+                            ${emailConfig.login.enabled ? `
+                            <div class="login-status">
+                                🔐 <strong>Secure Access:</strong> You are logged in with session authentication. 
+                                Your session will expire automatically after 24 hours of inactivity.
+                            </div>
+                            ` : ''}
                             
-                            try {
-                                const response = await fetch('/test-monthly-data');
-                                const data = await response.json();
-                                
-                                if (data.success) {
-                                    const months = Object.keys(data.monthlyData).sort();
-                                    resultDiv.className = 'test-result test-success';
-                                    resultDiv.textContent = '✅ Monthly Data Fetched Successfully!\\n\\n' +
-                                        'Symbol: ' + data.symbol + '\\n' +
-                                        'Months fetched: ' + data.count + '\\n' +
-                                        'Available months: ' + months.join(', ') + '\\n\\n' +
-                                        'Sample data:\\n' + JSON.stringify(data.monthlyData[months[months.length-1]], null, 2);
-                                } else {
-                                    resultDiv.className = 'test-result test-error';
-                                    resultDiv.textContent = '❌ Monthly Data Fetch Failed: ' + data.error + '\\n\\nMessage: ' + data.message;
+                            ${generateWebReport().replace('<h1>☕ Coffee Robusta Price Tracker</h1>', '')}
+                            
+                            <div class="test-section">
+                                <h3>📧 Email Testing</h3>
+                                <p>Test email functionality before waiting for scheduled reports:</p>
+                                <button class="test-btn" onclick="testSMTP()">🔧 Test SMTP Connection</button>
+                                <button class="test-btn" onclick="testEmail()">📧 Send Test Email</button>
+                                <button class="test-btn" onclick="testMonthlyData()">📊 Test Monthly Data</button>
+                                <div id="testResult" class="test-result" style="display: none;"></div>
+                            </div>
+                            
+                            <div style="text-align: center; margin-top: 30px;">
+                                <button class="refresh-btn" onclick="location.reload()">🔄 Refresh Report</button>
+                            </div>
+                        </div>                        
+                        <script>
+                            // Logout function
+                            function logout() {
+                                if (confirm('Are you sure you want to logout?')) {
+                                    window.location.href = '/logout';
                                 }
-                            } catch (error) {
-                                resultDiv.className = 'test-result test-error';
-                                resultDiv.textContent = '❌ Network Error: ' + error.message;
                             }
-                        }
-                    </script>
-                </body>
-                </html>
-            `);
+                            
+                            async function testSMTP() {
+                                const resultDiv = document.getElementById('testResult');
+                                resultDiv.style.display = 'block';
+                                resultDiv.textContent = 'Testing SMTP connection...';
+                                resultDiv.className = 'test-result';
+                                
+                                try {
+                                    const response = await fetch('/test-smtp');
+                                    const data = await response.json();
+                                    
+                                    if (data.success) {
+                                        resultDiv.className = 'test-result test-success';
+                                        resultDiv.textContent = '✅ SMTP Connection: ' + data.message + '\\n\\nConfig: ' + JSON.stringify(data.config, null, 2);
+                                    } else {
+                                        resultDiv.className = 'test-result test-error';
+                                        resultDiv.textContent = '❌ SMTP Connection Failed: ' + data.error + '\\n\\nConfig: ' + JSON.stringify(data.config, null, 2);
+                                    }
+                                } catch (error) {
+                                    resultDiv.className = 'test-result test-error';
+                                    resultDiv.textContent = '❌ Network Error: ' + error.message;
+                                }
+                            }
+                            
+                            async function testEmail() {
+                                const resultDiv = document.getElementById('testResult');
+                                resultDiv.style.display = 'block';
+                                resultDiv.textContent = 'Sending test email...';
+                                resultDiv.className = 'test-result';
+                                
+                                try {
+                                    const response = await fetch('/test-email');
+                                    const data = await response.json();
+                                    
+                                    if (data.success) {
+                                        resultDiv.className = 'test-result test-success';
+                                        resultDiv.textContent = '✅ Email Sent Successfully!\\n\\nMessage ID: ' + data.messageId + '\\n\\nFrom: ' + data.emailConfig.from + '\\nTo: ' + data.emailConfig.to + '\\n\\nCheck your email inbox (and spam folder)!';
+                                    } else {
+                                        resultDiv.className = 'test-result test-error';
+                                        resultDiv.textContent = '❌ Email Failed: ' + data.error + '\\n\\nConfig: ' + JSON.stringify(data.emailConfig, null, 2);
+                                    }
+                                } catch (error) {
+                                    resultDiv.className = 'test-result test-error';
+                                    resultDiv.textContent = '❌ Network Error: ' + error.message;
+                                }
+                            }
+                            
+                            async function testMonthlyData() {
+                                const resultDiv = document.getElementById('testResult');
+                                resultDiv.style.display = 'block';
+                                resultDiv.textContent = 'Fetching monthly data from TradingView...';
+                                resultDiv.className = 'test-result';
+                                
+                                try {
+                                    const response = await fetch('/test-monthly-data');
+                                    const data = await response.json();
+                                    
+                                    if (data.success) {
+                                        const months = Object.keys(data.monthlyData).sort();
+                                        resultDiv.className = 'test-result test-success';
+                                        resultDiv.textContent = '✅ Monthly Data Fetched Successfully!\\n\\n' +
+                                            'Symbol: ' + data.symbol + '\\n' +
+                                            'Months fetched: ' + data.count + '\\n' +
+                                            'Available months: ' + months.join(', ') + '\\n\\n' +
+                                            'Sample data:\\n' + JSON.stringify(data.monthlyData[months[months.length-1]], null, 2);
+                                    } else {
+                                        resultDiv.className = 'test-result test-error';
+                                        resultDiv.textContent = '❌ Monthly Data Fetch Failed: ' + data.error + '\\n\\nMessage: ' + data.message;
+                                    }
+                                } catch (error) {
+                                    resultDiv.className = 'test-result test-error';
+                                    resultDiv.textContent = '❌ Network Error: ' + error.message;
+                                }
+                            }                        </script>
+                    </body>
+                    </html>
+                `);
+            } else {
+                // Chuyển hướng đến trang login nếu chưa đăng nhập
+                res.writeHead(302, { 'Location': '/login' });
+                res.end();
+            }
         } else if (parsedUrl.pathname === '/api/price') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -1288,7 +1541,34 @@ const server = http.createServer((req, res) => {
                 monthlyTrend: monthlyTrend,
                 count: monthlyTrend.length,
                 timestamp: new Date().toISOString()
-            }));        } else if (parsedUrl.pathname === '/test-monthly-data') {
+            }));
+        } else if (parsedUrl.pathname === '/api/login-status') {
+            // API để kiểm tra trạng thái login system
+            const sessionId = getSessionFromCookie(req.headers.cookie);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                loginEnabled: emailConfig.login.enabled,
+                isLoggedIn: emailConfig.login.enabled ? isValidSession(sessionId) : null,
+                activeSessions: emailConfig.login.enabled ? activeSessions.size : 0,
+                sessionTimeout: emailConfig.login.sessionTimeout,
+                timestamp: new Date().toISOString()
+            }));
+        } else if (parsedUrl.pathname === '/api/sessions' && method === 'DELETE') {
+            // API để xóa tất cả sessions (admin only)
+            const sessionId = getSessionFromCookie(req.headers.cookie);
+            if (!emailConfig.login.enabled || isValidSession(sessionId)) {
+                activeSessions.clear();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'All sessions cleared',
+                    timestamp: new Date().toISOString()
+                }));
+                console.log('🧹 All login sessions cleared by admin');
+            } else {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized' }));
+            }} else if (parsedUrl.pathname === '/test-monthly-data') {
             // Test lấy dữ liệu tháng từ TradingView
             handleMonthlyDataTest(req, res);
             return;
@@ -1298,13 +1578,18 @@ const server = http.createServer((req, res) => {
                 availableEndpoints: [
                     'GET / - Status overview',
                     'GET /health - Health check',
-                    'GET /report - HTML report with email testing',
+                    'GET /login - Login page (if enabled)',
+                    'POST /login - Authenticate user',
+                    'GET /logout - Logout user',
+                    'GET /report - HTML report with login protection',
                     'GET /test-smtp - Test SMTP connection',
                     'GET /test-email - Send test email',
                     'GET /test-monthly-data - Test monthly data fetch from TradingView',
                     'GET /api/price - Current price data',
                     'GET /api/history - Price history',
-                    'GET /api/monthly-trend - Monthly price trend data'
+                    'GET /api/monthly-trend - Monthly price trend data',
+                    'GET /api/login-status - Login system status',
+                    'DELETE /api/sessions - Clear all sessions (admin only)'
                 ]
             }));
         }
