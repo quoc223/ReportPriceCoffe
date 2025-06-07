@@ -127,7 +127,7 @@ async function startRealtimeQuotes() {
         const chart = new client.Session.Chart();
           // Symbol hoạt động tốt cho Robusta Coffee       
            const workingSymbols = [
-            'ICEEUR:            git rm --cached -r .RC1!',    // Robusta Coffee Continuous Contract - ICE Europe
+            'ICEEUR:RC1!',    // Robusta Coffee Continuous Contract - ICE Europe
             'ICEEUR:RCH2025', // Robusta Coffee March 2025
             'ICEEUR:RCK2025', // Robusta Coffee May 2025
             'ICEEUR:RCN2025', // Robusta Coffee July 2025
