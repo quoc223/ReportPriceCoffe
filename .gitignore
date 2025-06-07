@@ -11,8 +11,7 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# Email config (chứa thông tin nhạy cảm)
-email-config.js
+
 
 # IDE
 .vscode/
